@@ -57,27 +57,43 @@ class ResourceCalendarLeaves(models.Model):
         leaves._adapt_overlapping_leave_timesheets()
         return leaves
 
-    def _adapt_overlapping_leave_timesheets(self):
-        """Bring the timesheets of already approved leaves back in line.
+    def _get_timesheet_overlapping_leaves(self):
+        """Approved leaves whose timesheets these records bear on.
 
-        ``hr_holidays`` recomputes the duration of a leave a new global time
-        off falls into, and ``project_timesheet_holidays`` regenerates the
-        timesheets of overlapping leaves when a global time off is moved or
-        removed -- but not when one is created. A public holiday added over an
-        approved leave therefore left the leave costing a day less while still
-        being timesheeted for it.
+        ``None`` when ``project_timesheet_holidays`` is not installed.
         """
         if "timesheet_ids" not in self._fields:
-            return  # project_timesheet_holidays is not installed
-        global_leaves = self.filtered(lambda leave: not leave.resource_id)
-        if not global_leaves:
-            return
+            return None
         overlapping = self.env["hr.leave"]
-        for global_leave in global_leaves:
+        for global_leave in self.filtered(lambda leave: not leave.resource_id):
             overlapping |= global_leave._get_overlapping_hr_leaves()
+        return overlapping
+
+    def _adapt_overlapping_leave_timesheets(self, previous=None):
+        """Bring the timesheets of already approved leaves back in line.
+
+        ``hr_holidays`` recomputes the duration of a leave a global time off
+        falls into, and ``project_timesheet_holidays`` regenerates the
+        timesheets of overlapping leaves when a global time off is removed --
+        but not when one is created or moved. A public holiday added over an
+        approved leave therefore left the leave costing a day less while
+        still being timesheeted for it, and a moved one left the leave
+        timesheeted for the new day and not for the old one.
+
+        :param previous: the leaves overlapping the records before a move,
+            which get their day back the same way.
+        """
+        overlapping = self._get_timesheet_overlapping_leaves()
+        if overlapping is None:
+            return  # project_timesheet_holidays is not installed
+        if previous:
+            overlapping |= previous
         if not overlapping:
             return
         overlapping.sudo()._generate_timesheets()
+        global_leaves = self.filtered(lambda leave: not leave.resource_id)
+        if not global_leaves:
+            return
         # The day just freed on the leave is a public holiday, so it has to be
         # accounted as one. `_timesheet_create_lines` skipped it a moment ago
         # because the leave still spans it, and it always will: only the
@@ -119,6 +135,8 @@ class ResourceCalendarLeaves(models.Model):
         )
         if not managed:
             return super().write(vals)
+        moved = managed if vals.keys() & {"date_from", "date_to"} else managed.browse()
+        previous = moved._get_timesheet_overlapping_leaves() if moved else None
         # A generated record belongs to the company it was generated for.
         # Standard recomputes `company_id` whenever the dates change -- the
         # schedule is computed from the dates and the company from the
@@ -128,7 +146,10 @@ class ResourceCalendarLeaves(models.Model):
         # where it collides with that company's own record of the same line.
         # The synchronisation pins the company itself wherever it matters.
         with self.env.protecting([self._fields["company_id"]], managed):
-            return super().write(vals)
+            res = super().write(vals)
+        if moved:
+            moved._adapt_overlapping_leave_timesheets(previous)
+        return res
 
     def unlink(self):
         self._check_public_holiday_managed()
