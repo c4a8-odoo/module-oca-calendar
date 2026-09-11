@@ -24,14 +24,6 @@ class CalendarPublicHolidayRegion(models.Model):
         help="The public holiday calendars of this country apply to the "
         "region. Leave empty to apply the calendars of every country.",
     )
-    state_id = fields.Many2one(
-        "res.country.state",
-        string="State",
-        domain="[('country_id', '=?', country_id)]",
-        help="The state this region lies in. Public holidays that were "
-        "scoped to the state before regions existed are assigned to the "
-        "regions of that state.",
-    )
     company_id = fields.Many2one(
         "res.company",
         help="Leave empty for a region shared by every company.",

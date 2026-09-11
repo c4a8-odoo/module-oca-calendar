@@ -106,71 +106,83 @@ def _legacy_state_rows(cr):
     return cr.fetchall()
 
 
-def assign_regions_from_legacy_states(env):
-    """Give the lines once scoped to states the regions lying in those states.
+def _legacy_state_ids_by_line(cr):
+    state_ids_by_line = {}
+    for line_id, state_id in _legacy_state_rows(cr):
+        state_ids_by_line.setdefault(line_id, set()).add(state_id)
+    return state_ids_by_line
+
+
+def disable_lines_with_legacy_states(env):
+    """Disable the lines once scoped to states that no region stands for.
 
     Public holiday lines used to be scoped to country states; they are
-    scoped to public holiday regions now, and regions are only ever created
-    for the places people work at -- ``hr_holidays_public`` builds one per
-    work location, carrying the state of its address. Every line that was
-    scoped to states is assigned the regions of those states. A line no
-    region stands for yet is disabled rather than left without a scope,
-    which would make it nationwide; it is enabled again as soon as a later
-    run finds a region for it.
+    scoped to public holiday regions now, and regions only exist for the
+    places people work at, which this module knows nothing about. A line
+    that was scoped to states and has no region yet would apply nationwide,
+    so it is disabled instead; ``assign_regions_from_legacy_states`` enables
+    it again as soon as a module that knows the places of work hands it the
+    regions lying in its states.
 
-    Idempotent: the legacy relation is read wherever it still exists, and
-    an assignment already made is left alone. Returns the lines that
-    received a region.
+    Idempotent. Returns the lines disabled by this run.
     """
     line_model = env["calendar.public.holiday.line"].with_context(active_test=False)
-    rows = _legacy_state_rows(env.cr)
-    if not rows:
-        return line_model
-    state_ids_by_line = {}
-    for line_id, state_id in rows:
-        state_ids_by_line.setdefault(line_id, set()).add(state_id)
-    region_model = env["calendar.public.holiday.region"]
-    regions_by_state = {}
-    for region in region_model.search(
-        [("state_id", "in", list({state_id for _line, state_id in rows}))]
-    ):
-        state_id = region.state_id.id
-        regions_by_state[state_id] = (
-            regions_by_state.get(state_id, region_model) | region
-        )
-    assigned = line_model
-    disabled = line_model
-    for line in line_model.browse(sorted(state_ids_by_line)).exists():
-        regions = region_model
-        for state_id in state_ids_by_line[line.id]:
-            regions |= regions_by_state.get(state_id, region_model)
-        missing = regions - line.region_ids
-        if missing:
-            line.write({"region_ids": [(4, region.id) for region in missing]})
-            assigned |= line
-        if not line.region_ids:
-            if line.active:
-                line.active = False
-                disabled |= line
-        elif missing and not line.active:
-            line.active = True
-    _logger.info(
-        "calendar_public_holiday: %s public holiday line(s) received the regions "
-        "of their former states",
-        len(assigned),
-    )
-    for line in disabled:
+    state_ids_by_line = _legacy_state_ids_by_line(env.cr)
+    lines = line_model.browse(sorted(state_ids_by_line)).exists()
+    unscoped = lines.filtered(lambda line: line.active and not line.region_ids)
+    if unscoped:
+        unscoped.write({"active": False})
+    for line in unscoped:
         _logger.warning(
             "calendar_public_holiday: no region stands for the former states of "
             "%s (%s); the line is disabled until one does",
             line.display_name,
             line.date,
         )
+    return unscoped
+
+
+def assign_regions_from_legacy_states(env, regions_by_state):
+    """Give the lines once scoped to states the regions lying in those states.
+
+    :param regions_by_state: ``{state_id: regions}``, the regions lying in
+        each state as resolved by a module that knows the places of work --
+        ``hr_holidays_public`` takes them from the work addresses.
+
+    Every line that was scoped to states is assigned the regions of those
+    states; a line disabled for lack of a region is enabled again when it
+    receives one. A line that selected every state of its country meant the
+    whole country and is left nationwide.
+
+    Idempotent: an assignment already made is left alone. Returns the lines
+    that received a region.
+    """
+    line_model = env["calendar.public.holiday.line"].with_context(active_test=False)
+    region_model = env["calendar.public.holiday.region"]
+    state_ids_by_line = _legacy_state_ids_by_line(env.cr)
+    assigned = line_model
+    for line in line_model.browse(sorted(state_ids_by_line)).exists():
+        regions = region_model
+        for state_id in state_ids_by_line[line.id]:
+            regions |= regions_by_state.get(state_id, region_model)
+        missing = regions - line.region_ids
+        if not missing:
+            continue
+        line.write({"region_ids": [(4, region.id) for region in missing]})
+        if not line.active:
+            line.active = True
+        assigned |= line
+    _logger.info(
+        "calendar_public_holiday: %s public holiday line(s) received the regions "
+        "of their former states",
+        len(assigned),
+    )
     return assigned
 
 
 def post_init_hook(env):
     # A database coming from hr_holidays_public still carries the legacy
     # state relation the pre-init hook renamed; the lines are scoped to
-    # regions now, so they get the regions of their former states.
-    assign_regions_from_legacy_states(env)
+    # regions now, so the state-scoped ones are disabled until a module
+    # knowing the places of work hands them the regions of their states.
+    disable_lines_with_legacy_states(env)

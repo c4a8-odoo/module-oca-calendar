@@ -10,6 +10,7 @@ from odoo.tools import html2plaintext
 from odoo.addons.base.tests.common import BaseCommon
 from odoo.addons.calendar_public_holiday.hooks import (
     assign_regions_from_legacy_states,
+    disable_lines_with_legacy_states,
 )
 
 
@@ -254,11 +255,11 @@ class TestCalendarPublicHolidayRegion(BaseCommon):
 class TestLegacyStateAssignment(BaseCommon):
     """Upgrading gives the lines once scoped to states the regions of those states.
 
-    Regions are only created for the places people work at, so the
-    assignment finds whatever regions carry the state; a line with none is
-    disabled rather than left nationwide. The legacy relation is a table no
-    model owns any more, so it is planted by SQL the way an upgraded
-    database carries it.
+    Regions only exist for the places people work at, which this module
+    does not know: it disables a line whose states no region stands for,
+    and a module knowing those places hands it the regions lying in its
+    states. The legacy relation is a table no model owns any more, so it
+    is planted by SQL the way an upgraded database carries it.
     """
 
     @classmethod
@@ -305,6 +306,10 @@ class TestLegacyStateAssignment(BaseCommon):
                 {"year": 2025, "country_id": cls.other_country.id}
             ),
         )
+        cls.munich = cls._create_region("Munich office", cls.country)
+        cls.nuremberg = cls._create_region("Nuremberg office", cls.country)
+        cls.cologne = cls._create_region("Cologne office", cls.country)
+        cls.twin_office = cls._create_region("Twin office", cls.other_country)
 
     @classmethod
     def _create_line(cls, day, name, holiday=None):
@@ -316,10 +321,17 @@ class TestLegacyStateAssignment(BaseCommon):
             }
         )
 
-    def _create_region(self, name, state):
-        return self.region_model.create(
-            {"name": name, "country_id": state.country_id.id, "state_id": state.id}
-        )
+    @classmethod
+    def _create_region(cls, name, country):
+        return cls.region_model.create({"name": name, "country_id": country.id})
+
+    def _regions_by_state(self):
+        """What a module knowing the places of work would resolve."""
+        return {
+            self.state_by.id: self.munich | self.nuremberg,
+            self.state_nw.id: self.cologne,
+            self.state_twin.id: self.twin_office,
+        }
 
     def _plant_legacy_states(self, pairs):
         # The table may still exist on an upgraded database, constraints and
@@ -338,24 +350,30 @@ class TestLegacyStateAssignment(BaseCommon):
 
     def test_no_legacy_table_is_a_noop(self):
         self.env.cr.execute("DROP TABLE IF EXISTS public_holiday_state_rel")
-        self.assertFalse(assign_regions_from_legacy_states(self.env))
+        self.assertFalse(disable_lines_with_legacy_states(self.env))
+        self.assertFalse(
+            assign_regions_from_legacy_states(self.env, self._regions_by_state())
+        )
         self.assertFalse(self.line_by.region_ids)
         self.assertTrue(self.line_by.active)
 
-    def test_no_region_creates_none_and_disables_the_line(self):
+    def test_a_state_scoped_line_is_disabled_until_it_has_a_region(self):
         self._plant_legacy_states([(self.line_by, self.state_by)])
         before = self.region_model.search_count([])
-        assigned = assign_regions_from_legacy_states(self.env)
-        self.assertFalse(assigned)
+        disabled = disable_lines_with_legacy_states(self.env)
+        self.assertEqual(disabled, self.line_by)
         self.assertEqual(self.region_model.search_count([]), before, "none created")
-        self.assertFalse(self.line_by.region_ids)
         self.assertFalse(self.line_by.active, "disabled rather than nationwide")
         self.assertTrue(self.line_national.active, "untouched")
+        self.assertFalse(disable_lines_with_legacy_states(self.env), "already disabled")
+
+    def test_a_line_that_already_has_a_region_is_not_disabled(self):
+        self.line_by.region_ids = [Command.link(self.munich.id)]
+        self._plant_legacy_states([(self.line_by, self.state_by)])
+        self.assertFalse(disable_lines_with_legacy_states(self.env))
+        self.assertTrue(self.line_by.active)
 
     def test_lines_get_the_regions_of_their_states(self):
-        munich = self._create_region("Munich office", self.state_by)
-        nuremberg = self._create_region("Nuremberg office", self.state_by)
-        cologne = self._create_region("Cologne office", self.state_nw)
         self._plant_legacy_states(
             [
                 (self.line_by, self.state_by),
@@ -363,44 +381,44 @@ class TestLegacyStateAssignment(BaseCommon):
                 (self.line_both, self.state_nw),
             ]
         )
-        assigned = assign_regions_from_legacy_states(self.env)
+        assigned = assign_regions_from_legacy_states(self.env, self._regions_by_state())
         self.assertEqual(assigned, self.line_by | self.line_both)
-        self.assertEqual(self.line_by.region_ids, munich | nuremberg)
-        self.assertEqual(self.line_both.region_ids, munich | nuremberg | cologne)
-        self.assertTrue(self.line_by.active)
+        self.assertEqual(self.line_by.region_ids, self.munich | self.nuremberg)
+        self.assertEqual(
+            self.line_both.region_ids, self.munich | self.nuremberg | self.cologne
+        )
         self.assertFalse(self.line_national.region_ids, "left nationwide")
 
-    def test_a_disabled_line_is_enabled_once_a_region_appears(self):
+    def test_a_disabled_line_is_enabled_once_it_receives_a_region(self):
         self._plant_legacy_states([(self.line_by, self.state_by)])
-        assign_regions_from_legacy_states(self.env)
+        disable_lines_with_legacy_states(self.env)
         self.assertFalse(self.line_by.active)
-        munich = self._create_region("Munich office", self.state_by)
-        assign_regions_from_legacy_states(self.env)
-        self.assertEqual(self.line_by.region_ids, munich)
+        assign_regions_from_legacy_states(self.env, {})
+        self.assertFalse(self.line_by.active, "still nothing stands for it")
+        assign_regions_from_legacy_states(self.env, self._regions_by_state())
         self.assertTrue(self.line_by.active)
 
     def test_the_assignment_is_idempotent(self):
-        munich = self._create_region("Munich office", self.state_by)
         self._plant_legacy_states([(self.line_by, self.state_by)])
-        first = assign_regions_from_legacy_states(self.env)
+        first = assign_regions_from_legacy_states(self.env, self._regions_by_state())
         self.assertEqual(first, self.line_by)
-        self.assertFalse(assign_regions_from_legacy_states(self.env), "nothing new")
-        self.assertEqual(self.line_by.region_ids, munich)
+        self.assertFalse(
+            assign_regions_from_legacy_states(self.env, self._regions_by_state()),
+            "nothing new",
+        )
+        self.assertEqual(self.line_by.region_ids, self.munich | self.nuremberg)
 
     def test_a_state_name_shared_across_countries_is_told_apart(self):
         """The state itself matches, not its name."""
-        munich = self._create_region("Munich office", self.state_by)
-        twin = self._create_region("Twin office", self.state_twin)
         self._plant_legacy_states(
             [(self.line_by, self.state_by), (self.line_twin, self.state_twin)]
         )
-        assign_regions_from_legacy_states(self.env)
-        self.assertEqual(self.line_by.region_ids, munich)
-        self.assertEqual(self.line_twin.region_ids, twin)
+        assign_regions_from_legacy_states(self.env, self._regions_by_state())
+        self.assertEqual(self.line_by.region_ids, self.munich | self.nuremberg)
+        self.assertEqual(self.line_twin.region_ids, self.twin_office)
 
     def test_every_state_of_the_country_means_nationwide(self):
         """Selecting all states was the same as selecting none."""
-        munich = self._create_region("Munich office", self.state_by)
         self._plant_legacy_states(
             [
                 (self.line_by, self.state_by),
@@ -409,13 +427,13 @@ class TestLegacyStateAssignment(BaseCommon):
                 (self.line_both, self.state_he),
             ]
         )
-        assign_regions_from_legacy_states(self.env)
-        self.assertFalse(self.line_both.region_ids, "the whole country")
-        self.assertTrue(self.line_both.active)
-        self.assertEqual(self.line_by.region_ids, munich)
+        disable_lines_with_legacy_states(self.env)
+        self.assertTrue(self.line_both.active, "the whole country")
+        assign_regions_from_legacy_states(self.env, self._regions_by_state())
+        self.assertFalse(self.line_both.region_ids)
+        self.assertEqual(self.line_by.region_ids, self.munich | self.nuremberg)
 
     def test_a_dangling_legacy_row_is_skipped(self):
-        munich = self._create_region("Munich office", self.state_by)
         gone = self._create_line(date(2025, 1, 6), "Gone")
         gone_id = gone.id
         gone.unlink()
@@ -425,6 +443,5 @@ class TestLegacyStateAssignment(BaseCommon):
                 (self.line_by.browse(gone_id), self.state_by),
             ]
         )
-        assigned = assign_regions_from_legacy_states(self.env)
+        assigned = assign_regions_from_legacy_states(self.env, self._regions_by_state())
         self.assertEqual(assigned, self.line_by)
-        self.assertEqual(self.line_by.region_ids, munich)
