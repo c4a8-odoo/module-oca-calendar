@@ -65,7 +65,7 @@ class TestPublicHolidayResourceCommon(TransactionCase):
 
         cls.country = cls.env.ref("base.de")
         cls.region_by = cls.env["calendar.public.holiday.region"].create(
-            {"name": "Test Bayern"}
+            {"name": "Test Bayern", "country_id": cls.country.id}
         )
         cls.region_nw = cls.env["calendar.public.holiday.region"].create(
             {"name": "Test Nordrhein"}
