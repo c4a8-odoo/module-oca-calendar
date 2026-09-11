@@ -57,7 +57,7 @@ class TestCalendarOverview(TestPublicHolidayResourceCommon):
     def test_a_regional_line_is_not_counted_here(self):
         """Its reach goes through people, which this module cannot see."""
         line = self._create_line(
-            self._weekday(0), name="Fronleichnam", states=self.state_by
+            self._weekday(0), name="Fronleichnam", regions=self.region_by
         )
         self.assertNotIn(line, self._overview(self.cal_by))
 

@@ -3,17 +3,17 @@
 
 from datetime import date
 
-from odoo import Command
-
 from .common import TestPublicHolidayResourceCommon
 
 
 class TestLineActive(TestPublicHolidayResourceCommon):
     """A disabled public holiday line generates no time off.
 
-    The guard for a line whose scope is gone: one assigned to work locations
-    that no longer exist would fall back to applying to everybody, so it can
-    be switched off entirely instead.
+    The guard for a line whose scope is gone: one assigned to regions that
+    no longer exist would fall back to applying to everybody, so it can be
+    switched off entirely instead. The flag itself lives in
+    ``calendar_public_holiday``; what is asserted here is its effect on the
+    generated time off.
     """
 
     def test_deactivating_removes_the_mirrors(self):
@@ -30,7 +30,7 @@ class TestLineActive(TestPublicHolidayResourceCommon):
 
     def test_deactivating_removes_the_resource_mirrors(self):
         line = self._create_line(
-            date(self.year, 6, 19), name="Fronleichnam", states=self.state_by
+            date(self.year, 6, 19), name="Fronleichnam", regions=self.region_by
         )
         self.assertTrue(self._mirrors(line, self.cal_by))
         line.active = False
@@ -38,42 +38,11 @@ class TestLineActive(TestPublicHolidayResourceCommon):
 
     def test_deactivating_a_national_line_restores_the_regional_rival(self):
         day = date(self.year, 10, 3)
-        regional = self._create_line(day, name="Regional", states=self.state_by)
+        regional = self._create_line(day, name="Regional", regions=self.region_by)
         national = self._create_line(day, name="National")
         self.assertFalse(self._mirrors(regional))
         national.active = False
         self.assertTrue(self._mirrors(regional, self.cal_by))
-
-    def test_a_disabled_line_stays_on_the_holiday_form(self):
-        """The one2many keeps archived lines, or nobody could re-enable them.
-
-        The value of a one2many drops archived records unless the field's own
-        context says otherwise; a context on the view arch is applied too
-        late. The field is therefore redefined with ``active_test: False``.
-        """
-        line = self._create_line(date(self.year, 10, 3))
-        line.active = False
-        self.assertIn(line, self.holiday.line_ids)
-
-    def test_the_next_year_copy_carries_a_disabled_line_disabled(self):
-        line = self._create_line(date(self.year, 10, 3))
-        line.active = False
-        self.env["calendar.public.holiday.next.year"].create(
-            {"public_holiday_ids": [Command.set(self.holiday.ids)]}
-        ).create_public_holidays()
-        copy = self.line_model.with_context(active_test=False).search(
-            [
-                ("name", "=", line.name),
-                ("public_holiday_id.year", "=", self.year + 1),
-            ]
-        )
-        self.assertEqual(len(copy), 1)
-        self.assertFalse(
-            copy.active,
-            "a disabled line must not come back to life in the new year",
-        )
-        # And it generated nothing there either.
-        self.assertFalse(self._mirrors(copy))
 
     def test_a_disabled_line_is_not_reported_as_an_issue(self):
         line = self._create_line(date(self.year, 10, 3))

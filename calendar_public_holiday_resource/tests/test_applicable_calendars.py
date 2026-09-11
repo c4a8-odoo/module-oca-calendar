@@ -27,7 +27,7 @@ class TestApplicableCalendars(TestPublicHolidayResourceCommon):
     def test_a_regional_holiday_is_put_on_no_schedule(self):
         """It belongs to the people working in the region, not to a schedule."""
         self._create_line(
-            date(self.year, 6, 19), name="Fronleichnam", states=self.state_by
+            date(self.year, 6, 19), name="Fronleichnam", regions=self.region_by
         )
         self.holiday.invalidate_recordset(["resource_calendar_count"])
         self.assertFalse(self.holiday._get_applicable_resource_calendars())

@@ -9,14 +9,6 @@ SYNC_TRIGGER_FIELDS = {"year", "country_id"}
 class CalendarPublicHoliday(models.Model):
     _inherit = "calendar.public.holiday"
 
-    # The one2many value itself drops archived lines unless the *field's*
-    # context says otherwise -- a context on the view is applied too late, the
-    # ids are already filtered out of the cache. A disabled line has to stay
-    # visible on the form, or it could never be enabled again from there.
-    # Every business-code reader filters on `active` itself, and the sync is
-    # meant to see disabled lines: that is how their time off gets removed.
-    line_ids = fields.One2many(context={"active_test": False})
-
     global_leave_count = fields.Integer(compute="_compute_global_leave_count")
     resource_calendar_count = fields.Integer(
         compute="_compute_resource_calendar_count",
@@ -30,8 +22,8 @@ class CalendarPublicHoliday(models.Model):
     def _get_applicable_resource_calendars(self):
         """Working schedules at least one of these public holidays reaches.
 
-        Only the nationwide public holidays count, since a regional one
-        belongs to the people working in its region rather than to a schedule.
+        Only the nationwide public holidays count, since a scoped one belongs
+        to the people of its regions rather than to a schedule.
         A nationwide public holiday is generated company-wide, which standard
         applies to every schedule of the company, so the reach is every
         schedule of a matching company.
@@ -68,7 +60,7 @@ class CalendarPublicHoliday(models.Model):
     @api.depends(
         "country_id",
         "line_ids",
-        "line_ids.state_ids",
+        "line_ids.region_ids",
         "line_ids.active",
         "line_ids.additional_resource_calendar_ids",
     )
@@ -91,7 +83,7 @@ class CalendarPublicHoliday(models.Model):
     @api.depends(
         "line_ids",
         "line_ids.date",
-        "line_ids.state_ids",
+        "line_ids.region_ids",
         "line_ids.active",
         "line_ids.additional_resource_calendar_ids",
         "country_id",

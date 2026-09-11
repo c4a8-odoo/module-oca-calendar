@@ -59,23 +59,24 @@ configuration up without any further glue:
 Configuration
 =============
 
-A nationwide public holiday (one with no state) is generated once per
+A nationwide public holiday (one naming no region) is generated once per
 company of the matching country, as a global time off without working
 hours, which standard Odoo applies to every working schedule of that
 company.
 
-A regional one is generated for single resources instead, so that people
-sharing a schedule can have different regions. Resolving a region to the
-resources concerned needs to know about people, which this module does
-not: ``hr_holidays_public_resource`` resolves them from the work
-location of each employee. On its own this module only applies
-nationwide public holidays.
+A public holiday naming **regions** is generated for single resources
+instead, so that people sharing a schedule can belong to different
+regions. Resolving a region to the resources concerned needs to know
+about people, which this module does not:
+``hr_holidays_public_resource`` resolves them from the public holiday
+region of each employee. On its own this module only applies nationwide
+public holidays.
 
-Two aspects are configurable per working schedule, under *Configuration
-> Working Schedules*:
+One aspect is configurable per working schedule, under *Configuration >
+Working Schedules*:
 
 -  **Apply Employee Public Holidays** -- untick to leave the employees
-   of a schedule without the personal entries of regional public
+   of a schedule without the personal entries of region-scoped public
    holidays. The company-wide entries reach the schedule either way.
 
 A public holiday line can also name **additional working schedules**: it
@@ -83,8 +84,7 @@ is then generated as a time off entry carrying each listed schedule, so
 everybody working by it gets the day -- a special day for one shift
 plan, say. Such an entry is only created where no company-wide record
 already applies: a nationwide public holiday on the same day covers
-every schedule anyway. A line naming only working schedules (no state)
-reaches exactly those schedules.
+every schedule anyway.
 
 The working schedule form shows a read-only overview of the public
 holidays that reach it -- the nationwide ones of its companies, grouped
@@ -92,14 +92,11 @@ by calendar year with the newest days first. Only days the schedule
 actually works are listed: a Friday holiday says nothing to a
 Monday-to-Thursday schedule. A flexible schedule has no fixed days, so
 it lists every day. With ``hr_holidays_public_resource`` installed, the
-regional and location-scoped days of the employees on the schedule are
-counted as well.
+region-scoped days of the employees on the schedule are counted as well.
 
-A public holiday line can be **disabled** instead of deleted: it then
-generates no time off at all but keeps its configuration. This is the
-escape hatch for a special public holiday whose scope has gone away -- a
-line assigned only to work locations that no longer exist would
-otherwise fall back to applying to everybody.
+A disabled public holiday line (see ``calendar_public_holiday``)
+generates no time off at all; disabling one removes the time off it
+generated.
 
 **Set the country on your companies.** A public holiday calendar with a
 country only reaches schedules whose company is in that country. A
@@ -149,7 +146,7 @@ holiday.
 
 If a public holiday generates no time off at all, the public holiday
 form says so and why -- most often because no company has a country set,
-or because no working schedule covers the region the holiday belongs to.
+or because nobody is assigned to the regions the holiday belongs to.
 
 Known issues / Roadmap
 ======================

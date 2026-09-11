@@ -410,21 +410,22 @@ generated on the public holiday for every employee working that day.</li>
 </div>
 <div class="section" id="configuration">
 <h2><a class="toc-backref" href="#toc-entry-1">Configuration</a></h2>
-<p>A nationwide public holiday (one with no state) is generated once per
+<p>A nationwide public holiday (one naming no region) is generated once per
 company of the matching country, as a global time off without working
 hours, which standard Odoo applies to every working schedule of that
 company.</p>
-<p>A regional one is generated for single resources instead, so that people
-sharing a schedule can have different regions. Resolving a region to the
-resources concerned needs to know about people, which this module does
-not: <tt class="docutils literal">hr_holidays_public_resource</tt> resolves them from the work
-location of each employee. On its own this module only applies
-nationwide public holidays.</p>
-<p>Two aspects are configurable per working schedule, under <em>Configuration
-&gt; Working Schedules</em>:</p>
+<p>A public holiday naming <strong>regions</strong> is generated for single resources
+instead, so that people sharing a schedule can belong to different
+regions. Resolving a region to the resources concerned needs to know
+about people, which this module does not:
+<tt class="docutils literal">hr_holidays_public_resource</tt> resolves them from the public holiday
+region of each employee. On its own this module only applies nationwide
+public holidays.</p>
+<p>One aspect is configurable per working schedule, under <em>Configuration &gt;
+Working Schedules</em>:</p>
 <ul class="simple">
 <li><strong>Apply Employee Public Holidays</strong> – untick to leave the employees
-of a schedule without the personal entries of regional public
+of a schedule without the personal entries of region-scoped public
 holidays. The company-wide entries reach the schedule either way.</li>
 </ul>
 <p>A public holiday line can also name <strong>additional working schedules</strong>: it
@@ -432,21 +433,17 @@ is then generated as a time off entry carrying each listed schedule, so
 everybody working by it gets the day – a special day for one shift
 plan, say. Such an entry is only created where no company-wide record
 already applies: a nationwide public holiday on the same day covers
-every schedule anyway. A line naming only working schedules (no state)
-reaches exactly those schedules.</p>
+every schedule anyway.</p>
 <p>The working schedule form shows a read-only overview of the public
 holidays that reach it – the nationwide ones of its companies, grouped
 by calendar year with the newest days first. Only days the schedule
 actually works are listed: a Friday holiday says nothing to a
 Monday-to-Thursday schedule. A flexible schedule has no fixed days, so
 it lists every day. With <tt class="docutils literal">hr_holidays_public_resource</tt> installed, the
-regional and location-scoped days of the employees on the schedule are
-counted as well.</p>
-<p>A public holiday line can be <strong>disabled</strong> instead of deleted: it then
-generates no time off at all but keeps its configuration. This is the
-escape hatch for a special public holiday whose scope has gone away – a
-line assigned only to work locations that no longer exist would
-otherwise fall back to applying to everybody.</p>
+region-scoped days of the employees on the schedule are counted as well.</p>
+<p>A disabled public holiday line (see <tt class="docutils literal">calendar_public_holiday</tt>)
+generates no time off at all; disabling one removes the time off it
+generated.</p>
 <p><strong>Set the country on your companies.</strong> A public holiday calendar with a
 country only reaches schedules whose company is in that country. A
 company with no country at all is not filtered out – otherwise nothing
@@ -487,7 +484,7 @@ generated ones and cleaned up. They can also be grouped by public
 holiday.</p>
 <p>If a public holiday generates no time off at all, the public holiday
 form says so and why – most often because no company has a country set,
-or because no working schedule covers the region the holiday belongs to.</p>
+or because nobody is assigned to the regions the holiday belongs to.</p>
 </div>
 <div class="section" id="known-issues-roadmap">
 <h2><a class="toc-backref" href="#toc-entry-3">Known issues / Roadmap</a></h2>

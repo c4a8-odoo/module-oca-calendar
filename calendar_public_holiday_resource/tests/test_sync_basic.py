@@ -46,7 +46,7 @@ class TestSyncBasic(TestPublicHolidayResourceCommon):
 
     def test_schedule_entry_spans_the_calendar_own_timezone(self):
         day = date(self.year, 10, 3)
-        line = self._create_line(day, states=self.state_nw, calendars=self.cal_tokyo)
+        line = self._create_line(day, regions=self.region_nw, calendars=self.cal_tokyo)
         self._assert_local_full_day(
             self._mirrors(line, calendar=self.cal_tokyo), day, "Asia/Tokyo"
         )
@@ -61,7 +61,7 @@ class TestSyncBasic(TestPublicHolidayResourceCommon):
         self.env.user.tz = "Europe/Berlin"
         cal_nz = self._create_calendar("Auckland", self.company, tz="Pacific/Auckland")
         day = date(self.year, 10, 3)
-        line = self._create_line(day, states=self.state_nw, calendars=cal_nz)
+        line = self._create_line(day, regions=self.region_nw, calendars=cal_nz)
         self._assert_local_full_day(
             self._mirrors(line, calendar=cal_nz), day, "Pacific/Auckland"
         )
@@ -132,7 +132,7 @@ class TestSyncBasic(TestPublicHolidayResourceCommon):
         line = self._create_line(
             date(self.year, 10, 3),
             name="Shift day",
-            states=self.state_nw,
+            regions=self.region_nw,
             calendars=self.cal_tokyo,
         )
         entry = self._mirrors(line, calendar=self.cal_tokyo)
@@ -144,7 +144,7 @@ class TestSyncBasic(TestPublicHolidayResourceCommon):
         line = self._create_line(
             date(self.year, 10, 3),
             name="Shift day",
-            states=self.state_nw,
+            regions=self.region_nw,
             calendars=self.cal_tokyo,
         )
         self.assertTrue(self._mirrors(line, calendar=self.cal_tokyo))
@@ -157,7 +157,10 @@ class TestSyncBasic(TestPublicHolidayResourceCommon):
         """A company-wide record already applies to every schedule."""
         day = date(self.year, 10, 3)
         listed = self._create_line(
-            day, name="Shift day", states=self.state_nw, calendars=self.cal_national
+            day,
+            name="Shift day",
+            regions=self.region_nw,
+            calendars=self.cal_national,
         )
         national = self._create_line(day, name="National")
         self.assertTrue(self._company_mirror(national))

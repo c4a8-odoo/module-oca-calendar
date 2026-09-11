@@ -10,9 +10,9 @@ from odoo.tests.common import TransactionCase
 class TestPublicHolidayResourceCommon(TransactionCase):
     """Fixtures for the synchronisation.
 
-    Which regions a working schedule covers comes from the work addresses of
-    its employees, and `resource` has no notion of either -- that is supplied
-    by `hr_holidays_public_resource`. These tests therefore stub the hook and
+    Which regions a working schedule covers comes from the people on it,
+    and `resource` has no notion of people -- that is supplied by
+    `hr_holidays_public_resource`. These tests therefore stub the hook and
     cover the mechanics; the derivation itself is tested where it lives.
     """
 
@@ -20,20 +20,20 @@ class TestPublicHolidayResourceCommon(TransactionCase):
     def setUpClass(cls):
         super().setUpClass()
         cls.env = cls.env(context=dict(cls.env.context, tracking_disable=True))
-        # Regional public holidays are resolved to the resources of the people
-        # working in the region, which `resource` knows nothing about; the
+        # Scoped public holidays are resolved to the resources of the people
+        # at the region, which `resource` knows nothing about; the
         # resolution lives in `hr_holidays_public_resource` and is tested there.
-        cls._states_by_calendar = {}
+        cls._regions_by_calendar = {}
 
         def _get_public_holiday_resource_targets(lines, calendars):
             targets = []
             for calendar in calendars:
-                states = cls._states_by_calendar.get(calendar.id)
-                if not states:
+                regions = cls._regions_by_calendar.get(calendar.id)
+                if not regions:
                     continue
                 for company in calendar._public_holiday_companies():
-                    for line in lines.filtered("state_ids"):
-                        if not line.state_ids & states:
+                    for line in lines.filtered("region_ids"):
+                        if not line.region_ids & regions:
                             continue
                         if not calendar._matches_public_holiday_country(line, company):
                             continue
@@ -64,11 +64,11 @@ class TestPublicHolidayResourceCommon(TransactionCase):
         ).unlink()
 
         cls.country = cls.env.ref("base.de")
-        cls.state_by = cls.env["res.country.state"].create(
-            {"name": "Test Bayern", "code": "TBY", "country_id": cls.country.id}
+        cls.region_by = cls.env["calendar.public.holiday.region"].create(
+            {"name": "Test Bayern"}
         )
-        cls.state_nw = cls.env["res.country.state"].create(
-            {"name": "Test Nordrhein", "code": "TNW", "country_id": cls.country.id}
+        cls.region_nw = cls.env["calendar.public.holiday.region"].create(
+            {"name": "Test Nordrhein"}
         )
         cls.other_country = cls.env.ref("base.fr")
 
@@ -97,7 +97,7 @@ class TestPublicHolidayResourceCommon(TransactionCase):
         ).write({"public_holiday_employee_sync": False})
 
         cls.cal_national = cls._create_calendar("National", cls.company)
-        cls.cal_by = cls._create_calendar("Bayern", cls.company, cls.state_by)
+        cls.cal_by = cls._create_calendar("Bayern", cls.company, cls.region_by)
         cls.cal_tokyo = cls._create_calendar("Tokyo", cls.company, tz="Asia/Tokyo")
         # The company-wide records span the day in the timezone of the main
         # schedule of the company, so the fixtures make that deterministic.
@@ -109,18 +109,18 @@ class TestPublicHolidayResourceCommon(TransactionCase):
             {"year": cls.year, "country_id": cls.country.id}
         )
         # The stub outlives a single test, so each one starts from the fixtures.
-        cls._states_baseline = dict(cls._states_by_calendar)
+        cls._regions_baseline = dict(cls._regions_by_calendar)
         cls._resources_baseline = dict(cls._resources_by_calendar)
 
     def setUp(self):
         super().setUp()
-        self._states_by_calendar.clear()
-        self._states_by_calendar.update(self._states_baseline)
+        self._regions_by_calendar.clear()
+        self._regions_by_calendar.update(self._regions_baseline)
         self._resources_by_calendar.clear()
         self._resources_by_calendar.update(self._resources_baseline)
 
     @classmethod
-    def _create_calendar(cls, name, company, state=None, tz="Europe/Berlin"):
+    def _create_calendar(cls, name, company, region=None, tz="Europe/Berlin"):
         calendar = cls.env["resource.calendar"].create(
             {
                 "name": name,
@@ -128,14 +128,14 @@ class TestPublicHolidayResourceCommon(TransactionCase):
                 "tz": tz,
             }
         )
-        if state:
-            cls._set_calendar_states(calendar, state)
+        if region:
+            cls._set_calendar_regions(calendar, region)
         return calendar
 
     @classmethod
-    def _set_calendar_states(cls, calendar, states):
-        """Stand in for people working in a region on this schedule."""
-        cls._states_by_calendar[calendar.id] = states
+    def _set_calendar_regions(cls, calendar, regions):
+        """Stand in for people of a region working on this schedule."""
+        cls._regions_by_calendar[calendar.id] = regions
         cls._resources_by_calendar.setdefault(
             calendar.id,
             cls.env["resource.resource"].create(
@@ -149,14 +149,14 @@ class TestPublicHolidayResourceCommon(TransactionCase):
 
     @classmethod
     def _create_line(
-        cls, day, name="Holiday", states=None, holiday=None, calendars=None
+        cls, day, name="Holiday", regions=None, holiday=None, calendars=None
     ):
         return cls.line_model.create(
             {
                 "name": name,
                 "date": day,
                 "public_holiday_id": (holiday or cls.holiday).id,
-                "state_ids": [(6, 0, states.ids)] if states else False,
+                "region_ids": [(6, 0, regions.ids)] if regions else False,
                 "additional_resource_calendar_ids": (
                     [(6, 0, calendars.ids)] if calendars else False
                 ),

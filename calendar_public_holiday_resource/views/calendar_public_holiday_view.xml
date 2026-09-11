@@ -50,16 +50,8 @@
                 <field name="global_leave_count" invisible="1" />
                 <field name="resource_calendar_count" invisible="1" />
             </group>
-            <!-- Disabled lines stay visible through the field-level context
-                 on `line_ids`, so they can be enabled again from here. -->
             <xpath
-                expr="//field[@name='line_ids']/list/field[@name='variable_date']"
-                position="after"
-            >
-                <field name="active" widget="boolean_toggle" optional="show" />
-            </xpath>
-            <xpath
-                expr="//field[@name='line_ids']/list/field[@name='state_ids']"
+                expr="//field[@name='line_ids']/list/field[@name='region_ids']"
                 position="after"
             >
                 <field
@@ -74,27 +66,23 @@
     <record id="view_calendar_public_holiday_line_form" model="ir.ui.view">
         <field name="name">calendar.public.holiday.line.form.resource</field>
         <field name="model">calendar.public.holiday.line</field>
+        <field
+            name="inherit_id"
+            ref="calendar_public_holiday.view_calendar_public_holiday_line_form"
+        />
         <field name="arch" type="xml">
-            <form>
-                <group>
-                    <field name="name" />
-                    <field name="date" />
-                    <field name="public_holiday_id" />
-                    <field name="state_ids" widget="many2many_tags" />
-                    <field
-                        name="additional_resource_calendar_ids"
-                        widget="many2many_tags"
-                    />
-                    <field name="variable_date" />
-                    <field name="active" widget="boolean_toggle" />
-                    <field name="global_leave_count" string="Generated Time Off" />
-                </group>
-            </form>
+            <field name="region_ids" position="after">
+                <field
+                    name="additional_resource_calendar_ids"
+                    widget="many2many_tags"
+                />
+            </field>
+            <field name="active" position="after">
+                <field name="global_leave_count" string="Generated Time Off" />
+            </field>
         </field>
     </record>
 
-    <!-- Creating next year's public holidays belongs with the list it copies
-         from, rather than in a menu of its own. -->
     <record id="view_calendar_public_holiday_list" model="ir.ui.view">
         <field name="name">calendar.public.holiday.list.resource</field>
         <field name="model">calendar.public.holiday</field>
@@ -103,18 +91,6 @@
             ref="calendar_public_holiday.view_calendar_public_holiday_list"
         />
         <field name="arch" type="xml">
-            <list position="inside">
-                <header>
-                    <button
-                        name="%(calendar_public_holiday.action_create_next_year_public_holidays)d"
-                        type="action"
-                        string="Create Next Year"
-                        display="always"
-                        class="btn-secondary"
-                        help="Copy a year of public holidays onto the following year."
-                    />
-                </header>
-            </list>
             <field name="country_id" position="after">
                 <field name="global_leave_count" string="Generated Time Off" />
             </field>

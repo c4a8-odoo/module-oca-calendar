@@ -21,5 +21,5 @@ that entries kept by hand can be told apart from the generated ones and cleaned
 up. They can also be grouped by public holiday.
 
 If a public holiday generates no time off at all, the public holiday form says
-so and why -- most often because no company has a country set, or because no
-working schedule covers the region the holiday belongs to.
+so and why -- most often because no company has a country set, or because
+nobody is assigned to the regions the holiday belongs to.

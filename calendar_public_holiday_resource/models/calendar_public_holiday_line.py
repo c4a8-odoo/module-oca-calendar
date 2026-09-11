@@ -15,7 +15,7 @@ _logger = logging.getLogger(__name__)
 SYNC_TRIGGER_FIELDS = {
     "date",
     "name",
-    "state_ids",
+    "region_ids",
     "public_holiday_id",
     "active",
     "additional_resource_calendar_ids",
@@ -25,23 +25,16 @@ SYNC_TRIGGER_FIELDS = {
 class CalendarPublicHolidayLine(models.Model):
     _inherit = "calendar.public.holiday.line"
 
-    active = fields.Boolean(
-        default=True,
-        help="A disabled public holiday generates no time off. Use this to "
-        "switch off a public holiday whose scope is gone -- a line assigned "
-        "to work locations that no longer exist would otherwise fall back to "
-        "applying to everybody.",
-    )
     additional_resource_calendar_ids = fields.Many2many(
         "resource.calendar",
         "calendar_public_holiday_line_resource_calendar_rel",
         "line_id",
         "calendar_id",
         string="Additional Working Schedules",
-        help="Working schedules a regional public holiday is generated on as "
-        "a time off entry carrying the schedule, so everybody working by it "
-        "gets the day as well. Only a scoped public holiday needs this: a "
-        "nationwide one is generated company-wide, which already reaches "
+        help="Working schedules a region-scoped public holiday is generated "
+        "on as a time off entry carrying the schedule, so everybody working "
+        "by it gets the day as well. Only a scoped public holiday needs this: "
+        "a nationwide one is generated company-wide, which already reaches "
         "every working schedule of the company.",
     )
     global_leave_ids = fields.One2many(
@@ -51,8 +44,8 @@ class CalendarPublicHolidayLine(models.Model):
     )
     global_leave_count = fields.Integer(compute="_compute_global_leave_count")
 
-    def _check_date_state_one(self):
-        res = super()._check_date_state_one()
+    def _check_date_region_one(self):
+        res = super()._check_date_region_one()
         if self.additional_resource_calendar_ids:
             others = self.search(
                 [
@@ -81,26 +74,7 @@ class CalendarPublicHolidayLine(models.Model):
         # Listing a schedule two lines of one day both carry has to be caught
         # whichever of them is edited.
         for line in self:
-            line._check_date_state_one()
-
-    @api.depends("name", "public_holiday_id.year", "public_holiday_id.country_id")
-    def _compute_display_name(self):
-        """Tell the same public holiday of different years apart.
-
-        The plain name repeats every year, so any reference to a line -- the
-        Public Holiday column of the generated time off, above all -- could not
-        say which year's holiday it meant. The year and the country are read
-        one by one rather than through the calendar's own display name, which
-        is already parenthesised and would nest.
-        """
-        for record in self:
-            holiday = record.public_holiday_id
-            if not holiday.year:
-                record.display_name = record.name
-                continue
-            country = holiday.country_id.name
-            scope = f"{holiday.year} - {country}" if country else str(holiday.year)
-            record.display_name = f"{record.name} ({scope})"
+            line._check_date_region_one()
 
     def _compute_global_leave_count(self):
         data = self.env["resource.calendar.leaves"]._read_group(
@@ -355,37 +329,25 @@ class CalendarPublicHolidayLine(models.Model):
             )
         return issues
 
-    def _has_public_holiday_scope(self):
-        """Whether this line is scoped rather than nationwide.
-
-        A nationwide line becomes one company-wide record per company, which
-        reaches every working schedule of the company; a scoped one only
-        reaches the resources of the people it applies to and the working
-        schedules it lists. Listing schedules is not a scope of its own: the
-        company-wide record covers them already. Extension point: other
-        modules add their own scoping dimensions on top.
-        """
-        self.ensure_one()
-        return bool(self.state_ids)
-
     def _public_holiday_scope_description(self):
         """Why a scoped line reached nobody, for the sync warning."""
         self.ensure_one()
-        names = self.state_ids.mapped("name")
+        names = self.region_ids.mapped("name")
         return self.env._(
-            "nobody works in %s (a regional public holiday is given to "
-            "the people whose work location is in one of its regions)",
+            "nobody works at %s (a region-scoped public holiday is given to "
+            "the people assigned to one of its regions)",
             ", ".join(names),
         )
 
     def _get_public_holiday_resource_targets(self, calendars):
-        """Resources a regional public holiday has to be generated for.
+        """Resources a region-scoped public holiday has to be generated for.
 
-        A working schedule is one scope, so a regional public holiday cannot be
+        A working schedule is one scope, so a scoped public holiday cannot be
         generated on it without giving it to everybody sharing the schedule.
-        Regional lines are therefore generated per resource instead, which
-        ``hr_holidays_public_resource`` resolves from the work addresses of the
-        employees. Nothing here knows about people, so nothing matches.
+        Scoped lines are therefore generated per resource instead, which
+        ``hr_holidays_public_resource`` resolves from the public holiday
+        region of the employees. Nothing here knows about people, so
+        nothing matches.
 
         :return: list of ``(line, resource, calendar, company)``
         """
@@ -398,7 +360,7 @@ class CalendarPublicHolidayLine(models.Model):
         without a working schedule, which standard applies to every schedule
         of the company. The working schedules a line lists get a record
         carrying the schedule -- unless a company-wide record already covers
-        the day there. Regional ones become one record per resource, so that
+        the day there. Scoped ones become one record per resource, so that
         colleagues sharing a schedule keep their own regions; a resource on
         a schedule the line lists is covered through the schedule already.
 
@@ -456,7 +418,7 @@ class CalendarPublicHolidayLine(models.Model):
         already applies: standard puts a company-wide record on every
         schedule of the company, so a second record for one schedule would
         have everybody on it off twice. A nationwide line therefore needs
-        none, whatever it lists; only a regional one gives its listed
+        none, whatever it lists; only a scoped one gives its listed
         schedules a day they would not get otherwise.
         """
         winner = {}
@@ -487,7 +449,7 @@ class CalendarPublicHolidayLine(models.Model):
     def _get_desired_resource_leaves(
         self, calendars, covered_days, covered_calendar_days
     ):
-        """One record per resource a regional line resolves to."""
+        """One record per resource a scoped line resolves to."""
         winner = {}
         for (
             line,
@@ -774,7 +736,7 @@ class CalendarPublicHolidayLine(models.Model):
 
         Deduplication picks a single winner per day, so a line can only be
         given up or taken back by looking at its rivals as well: adding a
-        nationwide holiday has to drop the regional mirror of the same day, and
+        nationwide holiday has to drop the scoped mirror of the same day, and
         removing it has to bring that mirror back.
         """
         dates = [line.date for line in self if line.date]

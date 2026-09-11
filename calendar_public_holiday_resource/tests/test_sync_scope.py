@@ -7,16 +7,16 @@ from .common import TestPublicHolidayResourceCommon
 
 
 class TestSyncScope(TestPublicHolidayResourceCommon):
-    def test_regional_line_only_reaches_declared_schedule(self):
+    def test_scoped_line_only_reaches_declared_schedule(self):
         line = self._create_line(
-            date(self.year, 6, 19), name="Fronleichnam", states=self.state_by
+            date(self.year, 6, 19), name="Fronleichnam", regions=self.region_by
         )
         self.assertEqual(self._mirrors(line).calendar_id, self.cal_by)
 
-    def test_regional_line_ignores_other_region(self):
-        cal_nw = self._create_calendar("Nordrhein", self.company, self.state_nw)
+    def test_scoped_line_ignores_other_region(self):
+        cal_nw = self._create_calendar("Nordrhein", self.company, self.region_nw)
         line = self._create_line(
-            date(self.year, 6, 19), name="Fronleichnam", states=self.state_by
+            date(self.year, 6, 19), name="Fronleichnam", regions=self.region_by
         )
         self.assertFalse(self._mirrors(line, cal_nw))
 
@@ -79,7 +79,7 @@ class TestSyncScope(TestPublicHolidayResourceCommon):
         generated on a different schedule entirely.
         """
         line = self._create_line(
-            date(self.year, 6, 19), name="Fronleichnam", states=self.state_by
+            date(self.year, 6, 19), name="Fronleichnam", regions=self.region_by
         )
         self.assertTrue(self._mirrors(line, self.cal_by))
         summary = line._sync_global_leaves(calendars=self.cal_national, dry_run=True)
@@ -90,19 +90,19 @@ class TestSyncScope(TestPublicHolidayResourceCommon):
 
     def test_a_scoped_sync_still_reports_a_region_nobody_covers(self):
         line = self._create_line(
-            date(self.year, 6, 19), name="Fronleichnam", states=self.state_nw
+            date(self.year, 6, 19), name="Fronleichnam", regions=self.region_nw
         )
         summary = line._sync_global_leaves(calendars=self.cal_national, dry_run=True)
         self.assertTrue(summary["issues"])
-        self.assertIn(self.state_nw.name, summary["issues"][0])
+        self.assertIn(self.region_nw.name, summary["issues"][0])
 
     def test_undeclared_region_is_reported(self):
         line = self._create_line(
-            date(self.year, 6, 19), name="Fronleichnam", states=self.state_nw
+            date(self.year, 6, 19), name="Fronleichnam", regions=self.region_nw
         )
         summary = line._sync_global_leaves(dry_run=True)
         self.assertTrue(
-            any(self.state_nw.name in issue for issue in summary["issues"]),
+            any(self.region_nw.name in issue for issue in summary["issues"]),
             f"the undeclared region should be named in {summary['issues']}",
         )
 
@@ -117,25 +117,25 @@ class TestSyncScope(TestPublicHolidayResourceCommon):
     def test_employee_sync_disabled_schedule_is_skipped(self):
         self.cal_by.public_holiday_employee_sync = False
         line = self._create_line(
-            date(self.year, 6, 19), name="Fronleichnam", states=self.state_by
+            date(self.year, 6, 19), name="Fronleichnam", regions=self.region_by
         )
         self.assertFalse(self._mirrors(line))
 
     def test_reenabling_employee_sync_recreates_mirror(self):
         self.cal_by.public_holiday_employee_sync = False
         line = self._create_line(
-            date(self.year, 6, 19), name="Fronleichnam", states=self.state_by
+            date(self.year, 6, 19), name="Fronleichnam", regions=self.region_by
         )
         self.cal_by.public_holiday_employee_sync = True
         self.assertTrue(self._mirrors(line, self.cal_by))
 
-    def test_covering_a_region_adds_its_regional_holiday(self):
+    def test_covering_a_region_adds_its_scoped_holiday(self):
         line = self._create_line(
-            date(self.year, 6, 19), name="Fronleichnam", states=self.state_by
+            date(self.year, 6, 19), name="Fronleichnam", regions=self.region_by
         )
         self.assertFalse(self._mirrors(line, self.cal_national))
-        # As if an employee working in that region joined the schedule.
-        self._set_calendar_states(self.cal_national, self.state_by)
+        # As if an employee of that region joined the schedule.
+        self._set_calendar_regions(self.cal_national, self.region_by)
         line._sync_global_leaves()
         self.assertTrue(self._mirrors(line, self.cal_national))
 
@@ -144,7 +144,7 @@ class TestSyncScope(TestPublicHolidayResourceCommon):
         line = self._create_line(
             date(self.year, 10, 3),
             name="Shift day",
-            states=self.state_nw,
+            regions=self.region_nw,
             calendars=shared,
         )
         mirrors = self._mirrors(line, calendar=shared)

@@ -37,11 +37,11 @@ class TestSyncIdempotent(TestPublicHolidayResourceCommon):
 
     def test_regional_mirror_spans_the_resource_local_day(self):
         self.env.user.tz = "America/New_York"
-        self._set_calendar_states(self.cal_by, self.state_by)
+        self._set_calendar_regions(self.cal_by, self.region_by)
         resource = self._resources_by_calendar[self.cal_by.id]
         resource.tz = "Europe/Berlin"
         day = date(self.year, 8, 15)
-        line = self._create_line(day, name="Regional", states=self.state_by)
+        line = self._create_line(day, name="Regional", regions=self.region_by)
         mirror = self.leave_model.search(
             [
                 ("public_holiday_line_id", "=", line.id),

@@ -111,14 +111,17 @@ class TestSyncConflicts(TestPublicHolidayResourceCommon):
         day = date(self.year, 10, 3)
         manual = self._manual_leave(day, self.cal_national, name="Shift day")
         line = self._create_line(
-            day, name="Shift day", states=self.state_nw, calendars=self.cal_national
+            day,
+            name="Shift day",
+            regions=self.region_nw,
+            calendars=self.cal_national,
         )
         self.assertEqual(manual.public_holiday_line_id, line)
         self.assertEqual(self._mirrors(line, calendar=self.cal_national), manual)
 
     def test_national_line_wins_over_regional_on_same_day(self):
         day = date(self.year, 10, 3)
-        regional = self._create_line(day, name="Regional", states=self.state_by)
+        regional = self._create_line(day, name="Regional", regions=self.region_by)
         national = self._create_line(day, name="National")
         self.assertFalse(self._mirrors(regional))
         self.assertTrue(self._company_mirror(national))
@@ -126,9 +129,9 @@ class TestSyncConflicts(TestPublicHolidayResourceCommon):
     def test_two_regions_on_one_schedule_yield_a_single_mirror(self):
         day = date(self.year, 6, 19)
         both = self._create_calendar("Both", self.company)
-        self._set_calendar_states(both, self.state_by | self.state_nw)
-        line_by = self._create_line(day, name="BY", states=self.state_by)
-        line_nw = self._create_line(day, name="NW", states=self.state_nw)
+        self._set_calendar_regions(both, self.region_by | self.region_nw)
+        line_by = self._create_line(day, name="BY", regions=self.region_by)
+        line_nw = self._create_line(day, name="NW", regions=self.region_nw)
         mirrors = self.leave_model.search(
             [
                 ("calendar_id", "=", both.id),

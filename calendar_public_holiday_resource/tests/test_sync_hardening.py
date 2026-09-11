@@ -22,7 +22,7 @@ class TestSyncHardening(TestPublicHolidayResourceCommon):
         line = self._create_line(
             date(self.year, 10, 3),
             name="Shift day",
-            states=self.state_nw,
+            regions=self.region_nw,
             calendars=shared,
         )
         company = self.env["res.company"].create(
@@ -44,10 +44,10 @@ class TestSyncHardening(TestPublicHolidayResourceCommon):
         The foreign key nullifies ``resource_id``, which would silently turn a
         regional public holiday into one for the whole schedule.
         """
-        self._set_calendar_states(self.cal_by, self.state_by)
+        self._set_calendar_regions(self.cal_by, self.region_by)
         resource = self._resources_by_calendar[self.cal_by.id]
         line = self._create_line(
-            date(self.year, 8, 15), name="Regional", states=self.state_by
+            date(self.year, 8, 15), name="Regional", regions=self.region_by
         )
         self.assertTrue(
             self.leave_model.search(
@@ -65,7 +65,7 @@ class TestSyncHardening(TestPublicHolidayResourceCommon):
 
     def test_bulk_deleting_resources_does_not_collide(self):
         """Two nullified mirrors of one line would violate the unique index."""
-        self._set_calendar_states(self.cal_by, self.state_by)
+        self._set_calendar_regions(self.cal_by, self.region_by)
         first = self._resources_by_calendar[self.cal_by.id]
         second = self.env["resource.resource"].create(
             {
@@ -76,7 +76,7 @@ class TestSyncHardening(TestPublicHolidayResourceCommon):
         )
         self._resources_by_calendar[self.cal_by.id] = first | second
         line = self._create_line(
-            date(self.year, 8, 15), name="Regional", states=self.state_by
+            date(self.year, 8, 15), name="Regional", regions=self.region_by
         )
         mirrors = self.leave_model.search([("public_holiday_line_id", "=", line.id)])
         self.assertEqual(len(mirrors), 2)

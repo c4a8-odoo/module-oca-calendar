@@ -39,33 +39,3 @@ class TestDisplayName(TestPublicHolidayResourceCommon):
             }
         )
         self.assertEqual(manual.display_name, "Company outing")
-
-    def test_line_tells_years_apart(self):
-        next_year = self.holiday_model.create(
-            {"year": self.year + 1, "country_id": self.country.id}
-        )
-        this_one = self._create_line(date(self.year, 10, 3), name="Tag der Einheit")
-        next_one = self._create_line(
-            date(self.year + 1, 10, 3), name="Tag der Einheit", holiday=next_year
-        )
-        self.assertNotEqual(this_one.display_name, next_one.display_name)
-        self.assertIn(str(self.year), this_one.display_name)
-        self.assertIn(str(self.year + 1), next_one.display_name)
-
-    def test_line_names_year_and_country(self):
-        line = self._create_line(date(self.year, 10, 3), name="Tag der Einheit")
-        self.assertEqual(
-            line.display_name,
-            f"Tag der Einheit ({self.year} - {self.country.name})",
-        )
-
-    def test_line_without_a_country_names_the_year_only(self):
-        holiday = self.holiday_model.create({"year": self.year + 2})
-        line = self._create_line(
-            date(self.year + 2, 10, 3), name="Plain", holiday=holiday
-        )
-        self.assertEqual(line.display_name, f"Plain ({self.year + 2})")
-
-    def test_line_name_does_not_nest_brackets(self):
-        line = self._create_line(date(self.year, 10, 3), name="Tag der Einheit")
-        self.assertNotIn("((", line.display_name)

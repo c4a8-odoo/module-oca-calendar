@@ -17,10 +17,10 @@ class ResourceCalendar(models.Model):
     public_holiday_employee_sync = fields.Boolean(
         string="Apply Employee Public Holidays",
         default=True,
-        help="If checked, the regional public holidays are generated as personal "
-        "time off for the employees on this working schedule. The nationwide "
-        "public holidays are generated company-wide and reach this schedule "
-        "either way.",
+        help="If checked, the region-scoped public holidays are generated as "
+        "personal time off for the employees on this working schedule. The "
+        "nationwide public holidays are generated company-wide and reach this "
+        "schedule either way.",
     )
     public_holiday_overview_line_ids = fields.Many2many(
         "calendar.public.holiday.line",
