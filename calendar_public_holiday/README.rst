@@ -59,8 +59,9 @@ Regions are maintained under *Calendar > Configuration > Public Holidays
 > Public Holiday Regions*. A region names its country: the public
 holiday calendars of that country apply to it, whatever the country of
 its company; a region without a country takes the calendars of every
-country. The form of a region lists every public holiday somebody there
-gets: the nationwide ones and the ones assigned to the region.
+country. A region can also name the state it lies in. The form of a
+region lists every public holiday somebody there gets: the nationwide
+ones and the ones assigned to the region.
 
 **Create Next Year**, on the list of public holidays, copies a year of
 public holidays onto the following year, regions included.
@@ -78,11 +79,12 @@ Changelog
 ----------
 
 -  Public holiday lines are scoped to public holiday regions instead of
-   country states. Upgrading turns every state a line was scoped to into
-   a shared region of the same name, carrying the state's country, and
-   assigns it to the line.
+   country states. Regions are only created for the places people work
+   at (see ``hr_holidays_public``); upgrading assigns every line that
+   was scoped to states the regions lying in those states, and disables
+   a line no region stands for yet.
 -  A region names its country, which selects the public holiday
-   calendars applying to it.
+   calendars applying to it, and the state it lies in.
 -  A public holiday line can be disabled.
 
 Bug Tracker

@@ -3,11 +3,14 @@
 
 from openupgradelib import openupgrade
 
-from odoo.addons.calendar_public_holiday.hooks import migrate_states_to_regions
+from odoo.addons.calendar_public_holiday.hooks import (
+    assign_regions_from_legacy_states,
+)
 
 
 @openupgrade.migrate()
 def migrate(env, version):
     # The lines are scoped to regions instead of states from this version
-    # on: every state a line was scoped to becomes a region of that name.
-    migrate_states_to_regions(env)
+    # on: every line scoped to states is assigned the regions lying in them,
+    # or disabled until such a region exists.
+    assign_regions_from_legacy_states(env)

@@ -412,8 +412,9 @@ a nationwide public holiday, or name the regions it is observed at.</li>
 &gt; Public Holiday Regions</em>. A region names its country: the public
 holiday calendars of that country apply to it, whatever the country of
 its company; a region without a country takes the calendars of every
-country. The form of a region lists every public holiday somebody there
-gets: the nationwide ones and the ones assigned to the region.</p>
+country. A region can also name the state it lies in. The form of a
+region lists every public holiday somebody there gets: the nationwide
+ones and the ones assigned to the region.</p>
 <p><strong>Create Next Year</strong>, on the list of public holidays, copies a year of
 public holidays onto the following year, regions included.</p>
 <p>A public holiday line can be <strong>disabled</strong> instead of deleted: it is then
@@ -428,11 +429,12 @@ everybody.</p>
 <h3><a class="toc-backref" href="#toc-entry-3">19.0.2.0.0</a></h3>
 <ul class="simple">
 <li>Public holiday lines are scoped to public holiday regions instead of
-country states. Upgrading turns every state a line was scoped to into
-a shared region of the same name, carrying the state’s country, and
-assigns it to the line.</li>
+country states. Regions are only created for the places people work
+at (see <tt class="docutils literal">hr_holidays_public</tt>); upgrading assigns every line that
+was scoped to states the regions lying in those states, and disables
+a line no region stands for yet.</li>
 <li>A region names its country, which selects the public holiday
-calendars applying to it.</li>
+calendars applying to it, and the state it lies in.</li>
 <li>A public holiday line can be disabled.</li>
 </ul>
 </div>

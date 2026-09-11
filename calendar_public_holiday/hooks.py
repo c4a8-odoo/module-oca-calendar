@@ -71,26 +71,14 @@ def pre_init_hook(env):
     migrate_rename_model_hr_holidays_public(env)
 
 
-def migrate_states_to_regions(env):
-    """Turn the related states of the public holiday lines into regions.
+def _legacy_state_rows(cr):
+    """``(line_id, state_id)`` pairs of the legacy state scoping, if any.
 
-    Public holiday lines used to be scoped to country states; they are
-    scoped to public holiday regions now. One shared region is created
-    per state that at least one line was scoped to, named after the state
-    and carrying its country, and every such line is assigned the regions
-    of its former states -- so the configuration keeps meaning the same
-    thing, and the modules that know about people can link the people of a
-    state to the region standing for it. A line that selected every state
-    of its country meant the whole country and stays nationwide.
-
-    Idempotent: the legacy relation is read wherever it still exists, an
-    existing shared region of the same name and country is reused, and an
-    assignment already made is left alone. Returns the regions standing
-    for the states.
+    A line that selected every state of its country meant the whole country
+    and is left out: it stays nationwide.
     """
-    cr = env.cr
     if not openupgrade.table_exists(cr, LEGACY_STATE_REL_TABLE):
-        return env["calendar.public.holiday.region"]
+        return []
     cr.execute(
         """
         SELECT rel.public_holiday_line_id, rel.state_id
@@ -112,52 +100,77 @@ def migrate_states_to_regions(env):
                        AND r.state_id = missing.id
                  )
            )
-        ORDER BY rel.state_id, rel.public_holiday_line_id
+        ORDER BY rel.public_holiday_line_id, rel.state_id
         """
     )
-    rows = cr.fetchall()
-    if not rows:
-        return env["calendar.public.holiday.region"]
-    region_model = env["calendar.public.holiday.region"].with_context(active_test=False)
+    return cr.fetchall()
+
+
+def assign_regions_from_legacy_states(env):
+    """Give the lines once scoped to states the regions lying in those states.
+
+    Public holiday lines used to be scoped to country states; they are
+    scoped to public holiday regions now, and regions are only ever created
+    for the places people work at -- ``hr_holidays_public`` builds one per
+    work location, carrying the state of its address. Every line that was
+    scoped to states is assigned the regions of those states. A line no
+    region stands for yet is disabled rather than left without a scope,
+    which would make it nationwide; it is enabled again as soon as a later
+    run finds a region for it.
+
+    Idempotent: the legacy relation is read wherever it still exists, and
+    an assignment already made is left alone. Returns the lines that
+    received a region.
+    """
     line_model = env["calendar.public.holiday.line"].with_context(active_test=False)
-    states = env["res.country.state"].browse(
-        sorted({state_id for _line, state_id in rows})
-    )
-    regions = {}
-    for state in states:
-        region = region_model.search(
-            [
-                ("name", "=", state.name),
-                ("country_id", "=", state.country_id.id),
-                ("company_id", "=", False),
-            ],
-            limit=1,
-        )
-        if not region:
-            region = region_model.create(
-                {"name": state.name, "country_id": state.country_id.id}
-            )
-        regions[state.id] = region
-    line_ids_by_region = {}
+    rows = _legacy_state_rows(env.cr)
+    if not rows:
+        return line_model
+    state_ids_by_line = {}
     for line_id, state_id in rows:
-        line_ids_by_region.setdefault(regions[state_id], set()).add(line_id)
-    for region, line_ids in line_ids_by_region.items():
-        lines = line_model.browse(sorted(line_ids)).exists()
-        missing = lines.filtered(lambda line, loc=region: loc not in line.region_ids)
+        state_ids_by_line.setdefault(line_id, set()).add(state_id)
+    region_model = env["calendar.public.holiday.region"]
+    regions_by_state = {}
+    for region in region_model.search(
+        [("state_id", "in", list({state_id for _line, state_id in rows}))]
+    ):
+        state_id = region.state_id.id
+        regions_by_state[state_id] = (
+            regions_by_state.get(state_id, region_model) | region
+        )
+    assigned = line_model
+    disabled = line_model
+    for line in line_model.browse(sorted(state_ids_by_line)).exists():
+        regions = region_model
+        for state_id in state_ids_by_line[line.id]:
+            regions |= regions_by_state.get(state_id, region_model)
+        missing = regions - line.region_ids
         if missing:
-            missing.write({"region_ids": [(4, region.id)]})
+            line.write({"region_ids": [(4, region.id) for region in missing]})
+            assigned |= line
+        if not line.region_ids:
+            if line.active:
+                line.active = False
+                disabled |= line
+        elif missing and not line.active:
+            line.active = True
     _logger.info(
-        "calendar_public_holiday: %s public holiday region(s) stand for the "
-        "%s state(s) of %s public holiday line(s)",
-        len(regions),
-        len(states),
-        len({line_id for line_id, _state in rows}),
+        "calendar_public_holiday: %s public holiday line(s) received the regions "
+        "of their former states",
+        len(assigned),
     )
-    return region_model.union(*regions.values())
+    for line in disabled:
+        _logger.warning(
+            "calendar_public_holiday: no region stands for the former states of "
+            "%s (%s); the line is disabled until one does",
+            line.display_name,
+            line.date,
+        )
+    return assigned
 
 
 def post_init_hook(env):
     # A database coming from hr_holidays_public still carries the legacy
     # state relation the pre-init hook renamed; the lines are scoped to
-    # regions now, so the states are turned into regions right away.
-    migrate_states_to_regions(env)
+    # regions now, so they get the regions of their former states.
+    assign_regions_from_legacy_states(env)
