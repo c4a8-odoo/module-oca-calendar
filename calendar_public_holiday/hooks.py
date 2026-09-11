@@ -71,40 +71,22 @@ def pre_init_hook(env):
     migrate_rename_model_hr_holidays_public(env)
 
 
-def _legacy_state_region_names(states):
-    """The region name standing for each legacy state.
-
-    A state is named after itself; only when two countries share a state
-    name (Limburg, say) is the country code appended, so that the two
-    regions can be told apart.
-    """
-    by_name = {}
-    for state in states:
-        by_name.setdefault(state.name, []).append(state)
-    names = {}
-    for name, same_name in by_name.items():
-        for state in same_name:
-            names[state.id] = (
-                name if len(same_name) == 1 else f"{name} ({state.country_id.code})"
-            )
-    return names
-
-
 def migrate_states_to_regions(env):
     """Turn the related states of the public holiday lines into regions.
 
     Public holiday lines used to be scoped to country states; they are
     scoped to public holiday regions now. One shared region is created
-    per state that at least one line was scoped to, named after the state,
-    and every such line is assigned the regions of its former states --
-    so the configuration keeps meaning the same thing, and the modules that
-    know about people can link the people of a region to the region named
-    after it. A line that selected every state of its country meant the
-    whole country and stays nationwide.
+    per state that at least one line was scoped to, named after the state
+    and carrying its country, and every such line is assigned the regions
+    of its former states -- so the configuration keeps meaning the same
+    thing, and the modules that know about people can link the people of a
+    state to the region standing for it. A line that selected every state
+    of its country meant the whole country and stays nationwide.
 
     Idempotent: the legacy relation is read wherever it still exists, an
-    existing region of the same name is reused, and an assignment already
-    made is left alone. Returns the regions standing for the states.
+    existing shared region of the same name and country is reused, and an
+    assignment already made is left alone. Returns the regions standing
+    for the states.
     """
     cr = env.cr
     if not openupgrade.table_exists(cr, LEGACY_STATE_REL_TABLE):
@@ -141,15 +123,20 @@ def migrate_states_to_regions(env):
     states = env["res.country.state"].browse(
         sorted({state_id for _line, state_id in rows})
     )
-    names = _legacy_state_region_names(states)
     regions = {}
     for state in states:
-        name = names[state.id]
         region = region_model.search(
-            [("name", "=", name), ("company_id", "=", False)], limit=1
+            [
+                ("name", "=", state.name),
+                ("country_id", "=", state.country_id.id),
+                ("company_id", "=", False),
+            ],
+            limit=1,
         )
         if not region:
-            region = region_model.create({"name": name})
+            region = region_model.create(
+                {"name": state.name, "country_id": state.country_id.id}
+            )
         regions[state.id] = region
     line_ids_by_region = {}
     for line_id, state_id in rows:

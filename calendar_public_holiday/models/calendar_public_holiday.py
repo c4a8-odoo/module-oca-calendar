@@ -93,6 +93,7 @@ class ResourceCalendarPublicHoliday(models.Model):
         end_dt=None,
         partner_id=None,
         region_ids=None,
+        country_id=None,
     ):
         """Returns recordset of calendar.public.holiday.line
         for the specified year, partner and regions
@@ -103,6 +104,8 @@ class ResourceCalendarPublicHoliday(models.Model):
             public holiday calendars
         :param region_ids: IDs of the public holiday regions whose
             scoped lines apply as well; nationwide lines always do
+        :param country_id: ID of the country selecting the public holiday
+            calendars; takes precedence over the country of the partner
         :return: recordset of calendar.public.holiday.line
         """
         partner = self.env["res.partner"].browse(partner_id)
@@ -111,7 +114,9 @@ class ResourceCalendarPublicHoliday(models.Model):
             end_dt = datetime.date(year, 12, 31)
         years = list(range(start_dt.year, end_dt.year + 1))
         holidays_filter = [("year", "in", years)]
-        if partner:
+        if country_id:
+            holidays_filter.append(("country_id", "in", (False, country_id)))
+        elif partner:
             if partner.country_id:
                 holidays_filter.append(
                     ("country_id", "in", (False, partner.country_id.id))
@@ -128,18 +133,25 @@ class ResourceCalendarPublicHoliday(models.Model):
         return public_holiday_line.search(lines_filter)
 
     @api.model
-    def is_public_holiday(self, selected_date, partner_id=None, region_ids=None):
+    def is_public_holiday(
+        self, selected_date, partner_id=None, region_ids=None, country_id=None
+    ):
         """
         Returns True if selected_date is a public holiday for the partner
         :param selected_date: datetime object
         :param partner_id: ID of the partner
         :param region_ids: IDs of the public holiday regions to consider
+        :param country_id: ID of the country, taking precedence over the
+            country of the partner
         :return: bool
         """
         partner = self.env["res.partner"].browse(partner_id)
         partner_id = partner.id if partner else None
         holidays_lines = self.get_holidays_list(
-            year=selected_date.year, partner_id=partner_id, region_ids=region_ids
+            year=selected_date.year,
+            partner_id=partner_id,
+            region_ids=region_ids,
+            country_id=country_id,
         )
         if holidays_lines:
             hol_date = holidays_lines.filtered(lambda r: r.date == selected_date)

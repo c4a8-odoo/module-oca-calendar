@@ -19,6 +19,11 @@ class CalendarPublicHolidayRegion(models.Model):
     _order = "name"
 
     name = fields.Char(required=True)
+    country_id = fields.Many2one(
+        "res.country",
+        help="The public holiday calendars of this country apply to the "
+        "region. Leave empty to apply the calendars of every country.",
+    )
     company_id = fields.Many2one(
         "res.company",
         help="Leave empty for a region shared by every company.",
@@ -41,7 +46,21 @@ class CalendarPublicHolidayRegion(models.Model):
         "nationwide ones and the ones assigned to the region directly.",
     )
 
-    @api.depends("company_id.country_id", "public_holiday_line_ids")
+    def _matches_public_holiday_country(self, line):
+        """Whether the public holiday calendar of ``line`` applies here.
+
+        The country of the region decides, not the one of its company. An
+        unknown country cannot rule a calendar out -- refusing it there
+        would silently apply nothing at all, which is the far worse
+        failure -- and a calendar without a country applies everywhere.
+        """
+        self.ensure_one()
+        holiday_country = line.public_holiday_id.country_id
+        if not holiday_country or not self.country_id:
+            return True
+        return holiday_country == self.country_id
+
+    @api.depends("country_id", "public_holiday_line_ids")
     def _compute_public_holiday_overview_line_ids(self):
         line_model = self.env["calendar.public.holiday.line"]
         # The always-true leaf keeps the no-search-all check quiet.
@@ -49,13 +68,6 @@ class CalendarPublicHolidayRegion(models.Model):
         nationwide = lines.filtered(lambda line: not line._has_public_holiday_scope())
         for region in self:
             reachable = nationwide | region.public_holiday_line_ids
-            # An unknown company country cannot rule a holiday calendar out.
-            country = region.company_id.country_id
-            if country:
-                reachable = reachable.filtered(
-                    lambda line, country=country: (
-                        not line.public_holiday_id.country_id
-                        or line.public_holiday_id.country_id == country
-                    )
-                )
-            region.public_holiday_overview_line_ids = reachable
+            region.public_holiday_overview_line_ids = reachable.filtered(
+                region._matches_public_holiday_country
+            )

@@ -8,6 +8,7 @@
         <field name="arch" type="xml">
             <list>
                 <field name="name" />
+                <field name="country_id" />
                 <field name="company_id" groups="base.group_multi_company" />
             </list>
         </field>
@@ -31,6 +32,7 @@
                             <field name="name" />
                         </group>
                         <group>
+                            <field name="country_id" />
                             <field
                                 name="company_id"
                                 groups="base.group_multi_company"

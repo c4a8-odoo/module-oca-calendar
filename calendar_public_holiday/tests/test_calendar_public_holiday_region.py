@@ -117,9 +117,9 @@ class TestCalendarPublicHolidayRegion(BaseCommon):
         self.assertNotIn(self.scoped, self._overview(self.region_other))
 
     def test_overview_rules_out_another_country(self):
-        company = self.env.company
-        company.country_id = self.other_country
-        region = self.region_model.create({"name": "B plant", "company_id": company.id})
+        region = self.region_model.create(
+            {"name": "B plant", "country_id": self.other_country.id}
+        )
         self.assertNotIn(self.national, self._overview(region))
         worldwide = self._create_line(
             date(self.year, 1, 1),
@@ -127,6 +127,56 @@ class TestCalendarPublicHolidayRegion(BaseCommon):
             holiday=self.holiday_model.create({"year": self.year}),
         )
         self.assertIn(worldwide, self._overview(region))
+
+    def test_overview_follows_the_region_country_not_the_company(self):
+        """The company's country says nothing once the region has its own."""
+        self.env.company.country_id = self.other_country
+        region = self.region_model.create(
+            {
+                "name": "A plant",
+                "country_id": self.country.id,
+                "company_id": self.env.company.id,
+            }
+        )
+        self.assertIn(self.national, self._overview(region))
+
+    def test_matches_public_holiday_country(self):
+        here = self.region_model.create({"name": "Here", "country_id": self.country.id})
+        there = self.region_model.create(
+            {"name": "There", "country_id": self.other_country.id}
+        )
+        anywhere = self.region_model.create({"name": "Anywhere"})
+        self.assertTrue(here._matches_public_holiday_country(self.national))
+        self.assertFalse(there._matches_public_holiday_country(self.national))
+        self.assertTrue(anywhere._matches_public_holiday_country(self.national))
+        worldwide = self._create_line(
+            date(self.year, 1, 1),
+            "Worldwide",
+            holiday=self.holiday_model.create({"year": self.year}),
+        )
+        self.assertTrue(there._matches_public_holiday_country(worldwide))
+
+    def test_get_holidays_list_country_wins_over_the_partner(self):
+        partner = self.env["res.partner"].create(
+            {"name": "Abroad", "country_id": self.other_country.id}
+        )
+        self.assertNotIn(
+            self.national,
+            self.holiday_model.get_holidays_list(self.year, partner_id=partner.id),
+        )
+        self.assertIn(
+            self.national,
+            self.holiday_model.get_holidays_list(
+                self.year, partner_id=partner.id, country_id=self.country.id
+            ),
+        )
+        self.assertTrue(
+            self.holiday_model.is_public_holiday(
+                date(self.year, 10, 3),
+                partner_id=partner.id,
+                country_id=self.country.id,
+            )
+        )
 
     def test_overview_is_readonly(self):
         field = self.region_model._fields["public_holiday_overview_line_ids"]
@@ -292,6 +342,7 @@ class TestStatesToRegions(BaseCommon):
         regions = migrate_states_to_regions(self.env)
         self.assertEqual(set(regions.mapped("name")), {"Bayern", "Nordrhein"})
         self.assertFalse(regions.company_id, "shared by every company")
+        self.assertEqual(regions.country_id, self.country, "the state's country")
         by = regions.filtered(lambda region: region.name == "Bayern")
         nw = regions - by
         self.assertEqual(self.line_by.region_ids, by)
@@ -306,16 +357,17 @@ class TestStatesToRegions(BaseCommon):
         self.assertEqual(self.line_by.region_ids, first)
         self.assertEqual(self.region_model.search_count([("name", "=", "Bayern")]), 1)
 
-    def test_a_state_name_shared_across_countries_is_disambiguated(self):
+    def test_a_state_name_shared_across_countries_gives_two_regions(self):
+        """The country tells them apart, not the name."""
         self._plant_legacy_states(
             [(self.line_by, self.state_by), (self.line_twin, self.state_twin)]
         )
         regions = migrate_states_to_regions(self.env)
-        self.assertEqual(
-            set(regions.mapped("name")),
-            {f"Bayern ({self.country.code})", f"Bayern ({self.other_country.code})"},
-        )
+        self.assertEqual(len(regions), 2)
+        self.assertEqual(set(regions.mapped("name")), {"Bayern"})
+        self.assertEqual(regions.country_id, self.country | self.other_country)
         self.assertNotEqual(self.line_by.region_ids, self.line_twin.region_ids)
+        self.assertEqual(self.line_twin.region_ids.country_id, self.other_country)
 
     def test_every_state_of_the_country_means_nationwide(self):
         """Selecting all states was the same as selecting none."""
