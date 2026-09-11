@@ -27,20 +27,3 @@ def post_init_hook(env):
         _logger.warning(
             "calendar_public_holiday_resource: no time off generated -- %s", issue
         )
-
-
-def uninstall_hook(env):
-    """Drop the generated mirrors so that no orphaned time off is left behind."""
-    leaves = (
-        env["resource.calendar.leaves"]
-        .sudo()
-        .search([("public_holiday_line_id", "!=", False)])
-    )
-    if leaves:
-        _logger.info(
-            "calendar_public_holiday_resource: removing %s generated time off",
-            len(leaves),
-        )
-        leaves.with_context(
-            **env["calendar.public.holiday.line"]._sync_leave_context()
-        ).unlink()

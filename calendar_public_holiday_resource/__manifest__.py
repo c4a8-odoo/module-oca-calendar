@@ -21,6 +21,5 @@
         "views/calendar_public_holiday_view.xml",
     ],
     "post_init_hook": "post_init_hook",
-    "uninstall_hook": "uninstall_hook",
     "installable": True,
 }
