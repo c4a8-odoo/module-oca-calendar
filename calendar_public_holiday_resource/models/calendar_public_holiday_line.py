@@ -38,11 +38,11 @@ class CalendarPublicHolidayLine(models.Model):
         "line_id",
         "calendar_id",
         string="Additional Working Schedules",
-        help="Working schedules this public holiday is generated on as a "
-        "time off entry carrying the schedule, so everybody working by it "
-        "gets the day -- wherever a company-wide record does not already "
-        "apply. A line with only working schedules reaches exactly those "
-        "schedules.",
+        help="Working schedules a regional public holiday is generated on as "
+        "a time off entry carrying the schedule, so everybody working by it "
+        "gets the day as well. Only a scoped public holiday needs this: a "
+        "nationwide one is generated company-wide, which already reaches "
+        "every working schedule of the company.",
     )
     global_leave_ids = fields.One2many(
         "resource.calendar.leaves",
@@ -50,13 +50,6 @@ class CalendarPublicHolidayLine(models.Model):
         string="Generated Time Off",
     )
     global_leave_count = fields.Integer(compute="_compute_global_leave_count")
-
-    def _get_domain_check_date_state_one(self):
-        # A line scoped to working schedules is not a nationwide duplicate of
-        # a real nationwide line on the same date.
-        return super()._get_domain_check_date_state_one() + [
-            ("additional_resource_calendar_ids", "=", False)
-        ]
 
     def _check_date_state_one(self):
         res = super()._check_date_state_one()
@@ -85,9 +78,8 @@ class CalendarPublicHolidayLine(models.Model):
 
     @api.constrains("date", "additional_resource_calendar_ids")
     def _check_date_additional_calendar(self):
-        # Also re-runs the nationwide-duplicate check: clearing the schedules
-        # turns a line nationwide, which `_check_date_state` does not see
-        # because the states did not change.
+        # Listing a schedule two lines of one day both carry has to be caught
+        # whichever of them is edited.
         for line in self:
             line._check_date_state_one()
 
@@ -366,20 +358,20 @@ class CalendarPublicHolidayLine(models.Model):
     def _has_public_holiday_scope(self):
         """Whether this line is scoped rather than nationwide.
 
-        A nationwide line becomes one company-wide record per company; a
-        scoped one only reaches the resources of the people it applies to
-        and the working schedules it lists. Extension point: other modules
-        add their own scoping dimensions on top.
+        A nationwide line becomes one company-wide record per company, which
+        reaches every working schedule of the company; a scoped one only
+        reaches the resources of the people it applies to and the working
+        schedules it lists. Listing schedules is not a scope of its own: the
+        company-wide record covers them already. Extension point: other
+        modules add their own scoping dimensions on top.
         """
         self.ensure_one()
-        return bool(self.state_ids) or bool(self.additional_resource_calendar_ids)
+        return bool(self.state_ids)
 
     def _public_holiday_scope_description(self):
         """Why a scoped line reached nobody, for the sync warning."""
         self.ensure_one()
-        names = self.state_ids.mapped("name") + (
-            self.additional_resource_calendar_ids.mapped("name")
-        )
+        names = self.state_ids.mapped("name")
         return self.env._(
             "nobody works in %s (a regional public holiday is given to "
             "the people whose work location is in one of its regions)",
@@ -458,15 +450,19 @@ class CalendarPublicHolidayLine(models.Model):
         return desired, covered_days
 
     def _get_desired_calendar_leaves(self, calendars, covered_days):
-        """The entries of the working schedules a line lists.
+        """The entries of the working schedules a scoped line lists.
 
         A schedule-wide entry is only generated where no company-wide record
         already applies: standard puts a company-wide record on every
         schedule of the company, so a second record for one schedule would
-        have everybody on it off twice.
+        have everybody on it off twice. A nationwide line therefore needs
+        none, whatever it lists; only a regional one gives its listed
+        schedules a day they would not get otherwise.
         """
         winner = {}
         for line in self:
+            if not line._has_public_holiday_scope():
+                continue
             for calendar in line.additional_resource_calendar_ids:
                 if calendar not in calendars:
                     # A schedule outside the requested subset stays untouched

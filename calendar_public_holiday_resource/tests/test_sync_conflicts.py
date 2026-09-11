@@ -110,7 +110,9 @@ class TestSyncConflicts(TestPublicHolidayResourceCommon):
         """A hand-made record scoped to the listed schedule is adopted."""
         day = date(self.year, 10, 3)
         manual = self._manual_leave(day, self.cal_national, name="Shift day")
-        line = self._create_line(day, name="Shift day", calendars=self.cal_national)
+        line = self._create_line(
+            day, name="Shift day", states=self.state_nw, calendars=self.cal_national
+        )
         self.assertEqual(manual.public_holiday_line_id, line)
         self.assertEqual(self._mirrors(line, calendar=self.cal_national), manual)
 

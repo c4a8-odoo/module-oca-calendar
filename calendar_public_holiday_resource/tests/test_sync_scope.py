@@ -142,7 +142,10 @@ class TestSyncScope(TestPublicHolidayResourceCommon):
     def test_listed_shared_schedule_gets_one_entry_per_company(self):
         shared = self._create_calendar("Shared", None)
         line = self._create_line(
-            date(self.year, 10, 3), name="Shift day", calendars=shared
+            date(self.year, 10, 3),
+            name="Shift day",
+            states=self.state_nw,
+            calendars=shared,
         )
         mirrors = self._mirrors(line, calendar=shared)
         self.assertEqual(mirrors.company_id, self.company | self.company_2)

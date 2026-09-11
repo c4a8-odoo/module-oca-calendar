@@ -41,7 +41,9 @@ class CalendarPublicHoliday(models.Model):
             lambda line: line.active and not line._has_public_holiday_scope()
         )
         listed = self.line_ids.filtered(
-            lambda line: line.active and line.additional_resource_calendar_ids
+            lambda line: line.active
+            and line._has_public_holiday_scope()
+            and line.additional_resource_calendar_ids
         )
         if not nationwide and not listed:
             return self.env["resource.calendar"]

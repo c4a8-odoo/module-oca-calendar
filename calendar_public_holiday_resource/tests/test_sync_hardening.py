@@ -20,7 +20,10 @@ class TestSyncHardening(TestPublicHolidayResourceCommon):
         """A listed shared schedule carries every company."""
         shared = self._create_calendar("Shared", None)
         line = self._create_line(
-            date(self.year, 10, 3), name="Shift day", calendars=shared
+            date(self.year, 10, 3),
+            name="Shift day",
+            states=self.state_nw,
+            calendars=shared,
         )
         company = self.env["res.company"].create(
             {"name": "Newcomer", "country_id": self.country.id}

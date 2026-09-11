@@ -46,7 +46,7 @@ class TestSyncBasic(TestPublicHolidayResourceCommon):
 
     def test_schedule_entry_spans_the_calendar_own_timezone(self):
         day = date(self.year, 10, 3)
-        line = self._create_line(day, calendars=self.cal_tokyo)
+        line = self._create_line(day, states=self.state_nw, calendars=self.cal_tokyo)
         self._assert_local_full_day(
             self._mirrors(line, calendar=self.cal_tokyo), day, "Asia/Tokyo"
         )
@@ -61,7 +61,7 @@ class TestSyncBasic(TestPublicHolidayResourceCommon):
         self.env.user.tz = "Europe/Berlin"
         cal_nz = self._create_calendar("Auckland", self.company, tz="Pacific/Auckland")
         day = date(self.year, 10, 3)
-        line = self._create_line(day, calendars=cal_nz)
+        line = self._create_line(day, states=self.state_nw, calendars=cal_nz)
         self._assert_local_full_day(
             self._mirrors(line, calendar=cal_nz), day, "Pacific/Auckland"
         )
@@ -117,21 +117,35 @@ class TestSyncBasic(TestPublicHolidayResourceCommon):
         self.env.user.company_ids |= newcomer
         self.assertTrue(self._company_mirror(line, newcomer))
 
-    def test_a_line_listing_only_schedules_reaches_exactly_them(self):
+    def test_a_nationwide_line_listing_schedules_stays_company_wide(self):
+        """The company-wide record already reaches every schedule."""
         line = self._create_line(
             date(self.year, 10, 3), name="Shift day", calendars=self.cal_tokyo
         )
+        self.assertTrue(self._company_mirror(line))
+        self.assertFalse(
+            self._mirrors(line, calendar=self.cal_tokyo),
+            "no schedule entry on top of the company-wide record",
+        )
+
+    def test_a_regional_line_listing_a_schedule_reaches_it(self):
+        line = self._create_line(
+            date(self.year, 10, 3),
+            name="Shift day",
+            states=self.state_nw,
+            calendars=self.cal_tokyo,
+        )
         entry = self._mirrors(line, calendar=self.cal_tokyo)
         self.assertEqual(len(entry), 1)
-        self.assertFalse(
-            self._company_mirror(line),
-            "a line scoped to schedules is not nationwide",
-        )
+        self.assertFalse(self._company_mirror(line), "a regional line")
         self.assertFalse(self._mirrors(line, calendar=self.cal_national))
 
     def test_listing_a_schedule_adds_and_removes_its_entry(self):
         line = self._create_line(
-            date(self.year, 10, 3), name="Shift day", calendars=self.cal_tokyo
+            date(self.year, 10, 3),
+            name="Shift day",
+            states=self.state_nw,
+            calendars=self.cal_tokyo,
         )
         self.assertTrue(self._mirrors(line, calendar=self.cal_tokyo))
         line.additional_resource_calendar_ids = [(4, self.cal_national.id)]
@@ -142,7 +156,9 @@ class TestSyncBasic(TestPublicHolidayResourceCommon):
     def test_no_schedule_entry_when_a_company_record_covers_the_day(self):
         """A company-wide record already applies to every schedule."""
         day = date(self.year, 10, 3)
-        listed = self._create_line(day, name="Shift day", calendars=self.cal_national)
+        listed = self._create_line(
+            day, name="Shift day", states=self.state_nw, calendars=self.cal_national
+        )
         national = self._create_line(day, name="National")
         self.assertTrue(self._company_mirror(national))
         self.assertFalse(
