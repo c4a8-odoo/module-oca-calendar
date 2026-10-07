@@ -55,7 +55,7 @@ class TestSyncAction(TestPublicHolidayResourceCommon):
         )
         self.assertEqual(
             action.binding_model_id,
-            self.env.ref("calendar_public_holiday.model_calendar_public_holiday"),
+            self.env.ref("calendar_public_holiday2.model_calendar_public_holiday"),
         )
         self.assertIn("list", action.binding_view_types)
 
